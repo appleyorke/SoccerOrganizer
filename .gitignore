@@ -261,6 +261,9 @@ paket-files/
 # Nuget files
 DeploymentSettings.props
 Packages.props
+add new 
+
+add 2 new
 
 #Local Log Files
 log*.txt
