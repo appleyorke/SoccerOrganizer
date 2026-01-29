@@ -1,0 +1,61 @@
+// d:\GitHub\Compression\compression.client\src\app\interceptors\compression.interceptor.ts
+import { HttpInterceptorFn } from '@angular/common/http';
+import { from } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
+
+export const compressionInterceptor: HttpInterceptorFn = (req, next) => {
+  // Only compress POST/PUT requests with body
+  if ((req.method === 'POST' || req.method === 'PUT') && req.body) {
+    return from(compressBody(req.body)).pipe(
+      switchMap((compressedBody) => {
+        const compressedRequest = req.clone({
+          body: new Blob([compressedBody as any], { type: 'application/json' }),
+          setHeaders: {
+            'Content-Encoding': 'gzip',
+            'Content-Type': 'application/json',
+          },
+        });
+        return next(compressedRequest);
+      })
+    );
+  }
+
+  // For GET requests, just add Accept-Encoding header
+  const requestWithHeaders = req.clone({
+    setHeaders: {
+      'Accept-Encoding': 'gzip, deflate, br',
+    },
+  });
+
+  return next(requestWithHeaders);
+};
+
+async function compressBody(body: any): Promise<Uint8Array> {
+  const jsonString = JSON.stringify(body);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(jsonString);
+
+  const readableStream = new ReadableStream({
+    start(controller: any) {
+      controller.enqueue(data);
+      controller.close();
+    },
+  });
+
+  const compressedStream = readableStream.pipeThrough(
+    new (window as any).CompressionStream('gzip')
+  );
+
+  const reader = compressedStream.getReader();
+  const chunks: Uint8Array[] = [];
+
+  let result = await reader.read();
+  while (!result.done) {
+    chunks.push(result.value as Uint8Array);
+    result = await reader.read();
+  }
+
+  return new Uint8Array(
+    chunks.reduce((acc, chunk) => [...acc, ...chunk], [] as number[])
+  );
+}
